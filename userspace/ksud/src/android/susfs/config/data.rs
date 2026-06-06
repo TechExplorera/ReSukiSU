@@ -21,9 +21,9 @@ pub struct Data {
 #[derive(Serialize, Deserialize)]
 pub struct Common {
     #[serde(default = "default_uname_value")]
-    pub version: String,
+    pub spoof_version: String,
     #[serde(default = "default_uname_value")]
-    pub release: String,
+    pub spoof_release: String,
     #[serde(default)]
     pub avc_spoofing: bool,
     #[serde(default)]
@@ -86,8 +86,8 @@ pub struct SusKstatStatically {
 impl Default for Common {
     fn default() -> Self {
         Self {
-            version: "default".to_string(),
-            release: "default".to_string(),
+            spoof_version: "default".to_string(),
+            spoof_release: "default".to_string(),
             avc_spoofing: false,
             enable_susfs_log: false,
             hide_sus_mnts_for_non_su_procs: false,

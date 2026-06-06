@@ -29,6 +29,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -53,8 +54,8 @@ private fun normalizeSusfsConfig(config: SusfsConfig): SusfsConfig {
 
     return SusfsConfig(
         common = SusfsCommonConfig(
-            version = safeString("default") { common.version },
-            release = safeString("default") { common.release },
+            spoofVersion = safeString("default") { common.spoofVersion },
+            spoofRelease = safeString("default") { common.spoofRelease },
             avcSpoofing = safeBoolean { common.avcSpoofing },
             enableSusfsLog = safeBoolean { common.enableSusfsLog },
             hideSusMntsForNonSuProcs = safeBoolean { common.hideSusMntsForNonSuProcs },
@@ -71,6 +72,21 @@ private fun normalizeSusfsConfig(config: SusfsConfig): SusfsConfig {
             statically = safeStaticKstatEntries { kstat.statically },
         ),
     )
+}
+
+private fun migrateLegacyUnameFields(jsonString: String): String {
+    return runCatching {
+        val root = JSONObject(jsonString)
+        val common = root.optJSONObject("common") ?: return@runCatching jsonString
+        val hasLegacyUnameFields = common.has("version") || common.has("release")
+        if (!hasLegacyUnameFields) return@runCatching jsonString
+
+        common.remove("version")
+        common.remove("release")
+        common.put("spoof_version", "default")
+        common.put("spoof_release", "default")
+        root.toString(2)
+    }.getOrDefault(jsonString)
 }
 
 private inline fun safeString(default: String, block: () -> String): String =
@@ -125,8 +141,8 @@ data class SusfsConfig(
 
 @Keep
 data class SusfsCommonConfig(
-    val version: String = "default",
-    val release: String = "default",
+    @SerializedName("spoof_version") val spoofVersion: String = "default",
+    @SerializedName("spoof_release") val spoofRelease: String = "default",
     @SerializedName("avc_spoofing") val avcSpoofing: Boolean = false,
     @SerializedName("enable_susfs_log") val enableSusfsLog: Boolean = false,
     @SerializedName("hide_sus_mnts_for_non_su_procs") val hideSusMntsForNonSuProcs: Boolean = false
@@ -351,6 +367,14 @@ class SuSFSScreenViewModel : ViewModel() {
                 ensureSlotInfoLoaded()
             }
 
+            val matchesKernelDefaults =
+                kernelDefaultUname.isNotBlank() &&
+                    kernelDefaultBuildTime.isNotBlank() &&
+                    trimmedUname == kernelDefaultUname &&
+                    trimmedBuildTime == kernelDefaultBuildTime
+            val shouldUseKernelDefaults =
+                (trimmedUname.isEmpty() && trimmedBuildTime.isEmpty()) || matchesKernelDefaults
+
             val resolvedUname = when {
                 trimmedUname.isNotEmpty() -> trimmedUname
                 kernelDefaultUname.isNotBlank() -> kernelDefaultUname
@@ -362,11 +386,14 @@ class SuSFSScreenViewModel : ViewModel() {
                 else -> "default"
             }
 
-            if (resolvedUname == uiState.unameValue && resolvedBuildTime == uiState.buildTimeValue) {
+            if (!shouldUseKernelDefaults &&
+                resolvedUname == uiState.unameValue &&
+                resolvedBuildTime == uiState.buildTimeValue
+            ) {
                 return@launch
             }
 
-            val success = if (resolvedUname == "default" && resolvedBuildTime == "default") {
+            val success = if (shouldUseKernelDefaults) {
                 runCommand("del_uname all", showSuccessSnackbar = false)
             } else {
                 runCommand(
@@ -382,27 +409,11 @@ class SuSFSScreenViewModel : ViewModel() {
 
     fun resetUnameAndBuildTime() {
         viewModelScope.launch(Dispatchers.IO) {
-            // Read the active boot slot's actual kernel uname / build time so
-            // that we can apply (not erase) those values. This guarantees the
-            // text fields can later display the real kernel value instead of
-            // the literal "default" placeholder.
             if (!hasActiveSlotInfo()) {
                 ensureSlotInfoLoaded()
             }
 
-            val uname = kernelDefaultUname
-            val buildTime = kernelDefaultBuildTime
-
-            val success = if (uname.isNotBlank() && buildTime.isNotBlank()) {
-                runCommand(
-                    "set_uname ${shellQuote(uname)} ${shellQuote(buildTime)}",
-                    showSuccessSnackbar = false,
-                )
-            } else {
-                // Fall back to erasing the override when slot info is
-                // unavailable (e.g. encrypted boot image, unsupported device).
-                runCommand("del_uname all", showSuccessSnackbar = false)
-            }
+            val success = runCommand("del_uname all", showSuccessSnackbar = false)
 
             if (success) {
                 postToast(ksuApp.getString(R.string.susfs_uname_build_time_reset))
@@ -627,9 +638,11 @@ class SuSFSScreenViewModel : ViewModel() {
                 return@launch
             }
 
+            val jsonString = String(bytes, Charsets.UTF_8)
+            val migratedJsonString = migrateLegacyUnameFields(jsonString)
             val isValid = runCatching {
-                val jsonString = String(bytes, Charsets.UTF_8)
-                gson.fromJson(jsonString, SusfsConfig::class.java)?.let(::normalizeSusfsConfig) != null
+                gson.fromJson(migratedJsonString, SusfsConfig::class.java)
+                    ?.let(::normalizeSusfsConfig) != null
             }.getOrDefault(false)
 
             if (!isValid) {
@@ -640,7 +653,7 @@ class SuSFSScreenViewModel : ViewModel() {
             val writeOk = runCatching {
                 ensureSusfsConfigDir()
                 SuFileOutputStream.open(susfsConfigFile()).use { os ->
-                    bytes.inputStream().use { it.copyTo(os) }
+                    migratedJsonString.byteInputStream(Charsets.UTF_8).use { it.copyTo(os) }
                 }
                 true
             }.getOrDefault(false)
@@ -867,8 +880,8 @@ class SuSFSScreenViewModel : ViewModel() {
             isRefreshing = false,
             enabled = statusEnabled,
             versionText = version,
-            unameValue = config.common.version.ifBlank { "default" },
-            buildTimeValue = config.common.release.ifBlank { "default" },
+            unameValue = config.common.spoofVersion.ifBlank { "default" },
+            buildTimeValue = config.common.spoofRelease.ifBlank { "default" },
             hideSuSMntsForNonSUProcs = config.common.hideSusMntsForNonSuProcs,
             hideMountsControlSupported = uiState.hideMountsControlSupported,
             susfsLogEnabled = config.common.enableSusfsLog,

@@ -98,8 +98,8 @@ pub enum SuSFSSubCommands {
     SetUname { version: String, release: String },
     /// Delete uname/build-time spoofing configuration
     /// Arguments:
-    ///   version  - Reset only kernel uname information (stored in 'version' field)
-    ///   release  - Reset only kernel build time information (stored in 'release' field)
+    ///   version  - Reset only kernel uname information (stored in 'spoof_version' field)
+    ///   release  - Reset only kernel build time information (stored in 'spoof_release' field)
     ///   all      - Reset both kernel uname and build time information
     #[command(name = "del_uname")]
     DelUname {
@@ -386,12 +386,12 @@ pub fn run_main(command: SuSFSSubCommands) -> Result<()> {
             let target_str = target.as_deref().unwrap_or("");
             match target_str {
                 "version" => {
-                    let release = config::read_config().common.release;
+                    let release = config::read_config().common.spoof_release;
                     api::set_uname(&"default".to_string(), &release)?;
                     config::operation::del_uname_selective("version")?;
                 }
                 "release" => {
-                    let version = config::read_config().common.version;
+                    let version = config::read_config().common.spoof_version;
                     api::set_uname(&version, &"default".to_string())?;
                     config::operation::del_uname_selective("release")?;
                 }

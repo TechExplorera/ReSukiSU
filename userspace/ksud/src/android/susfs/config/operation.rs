@@ -42,8 +42,8 @@ where
 {
     let mut config = read_config();
 
-    config.common.version = version.to_string();
-    config.common.release = release.to_string();
+    config.common.spoof_version = version.to_string();
+    config.common.spoof_release = release.to_string();
 
     save_config(&config);
 }
@@ -170,16 +170,16 @@ pub fn del_uname_selective(target: &str) -> Result<()> {
     match target {
         "version" => {
             // Reset only uname information
-            config.common.version = "default".to_string();
+            config.common.spoof_version = "default".to_string();
         }
         "release" => {
             // Reset only build time information
-            config.common.release = "default".to_string();
+            config.common.spoof_release = "default".to_string();
         }
         "all" => {
             // Reset both
-            config.common.version = "default".to_string();
-            config.common.release = "default".to_string();
+            config.common.spoof_version = "default".to_string();
+            config.common.spoof_release = "default".to_string();
         }
         _ => {
             return Err(anyhow::anyhow!(

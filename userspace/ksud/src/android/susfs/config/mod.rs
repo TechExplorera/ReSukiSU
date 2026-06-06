@@ -14,7 +14,7 @@ const INIT_NAMESPACE_SUSFS_CONFIG: &str = "/proc/1/root/data/adb/ksu/.susfs.json
 
 fn save_config(config: &Data) {
     let Ok(string) = serde_json::to_string_pretty(&config) else {
-        log::warn!("failed to deserialize susfs string");
+        log::warn!("failed to serialize susfs config");
         return;
     };
 
@@ -41,18 +41,31 @@ pub fn read_config() -> Data {
             return config;
         }
     };
-    let mut json: Data = match serde_json::from_str(&string) {
+
+    let mut value: serde_json::Value = match serde_json::from_str(&string) {
         Ok(s) => s,
         Err(e) => {
-            log::warn!("failed to serialize susfs config, Err: {e}, will use default config");
+            log::warn!("failed to deserialize susfs config, Err: {e}, will use default config");
+            let config = Data::default();
+            save_config(&config);
+            return config;
+        }
+    };
+    let migrated_legacy_uname = migrate_legacy_uname_fields(&mut value);
+
+    let json: Data = match serde_json::from_value(value) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("failed to deserialize susfs config, Err: {e}, will use default config");
             let config = Data::default();
             save_config(&config);
             return config;
         }
     };
 
-    // Normalize/migrate legacy config
-    normalize_legacy_config(&mut json);
+    if migrated_legacy_uname {
+        save_config(&json);
+    }
 
     json
 }
@@ -107,10 +120,30 @@ fn temp_config_path(path: &Path) -> PathBuf {
     path.with_file_name(file_name)
 }
 
-/// Fuck legacy config that swapped release and version field
-fn normalize_legacy_config(config: &mut Data) {
-    if config.common.version.contains(' ') {
-        // version does not contain space, so it is a swapped config
-        std::mem::swap(&mut config.common.version, &mut config.common.release);
+fn migrate_legacy_uname_fields(config: &mut serde_json::Value) -> bool {
+    let Some(common) = config
+        .get_mut("common")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return false;
+    };
+
+    let has_legacy_version = common.remove("version").is_some();
+    let has_legacy_release = common.remove("release").is_some();
+    if !(has_legacy_version || has_legacy_release) {
+        return false;
     }
+
+    log::warn!(
+        "legacy susfs uname fields detected; resetting spoof_version/spoof_release to kernel defaults"
+    );
+    common.insert(
+        "spoof_version".to_string(),
+        serde_json::Value::String("default".to_string()),
+    );
+    common.insert(
+        "spoof_release".to_string(),
+        serde_json::Value::String("default".to_string()),
+    );
+    true
 }
