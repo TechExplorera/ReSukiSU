@@ -1,11 +1,15 @@
-use crate::android::susfs::api;
-use crate::android::susfs::config;
-use crate::android::susfs::config::data::Data;
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use log::{info, warn};
 use prop_rs_android::{resetprop::ResetProp, sys_prop};
 
+use crate::android::susfs::api;
+use crate::android::susfs::config;
+use crate::android::susfs::config::data::Data;
+
 const USER_0_CE_AVAILABLE_PROP: &str = "sys.user.0.ce_available";
+const CE_AVAILABLE_WAIT_TIMEOUT_SECS: u64 = 10 * 60;
 
 enum CeAvailability {
     Available,
@@ -14,10 +18,21 @@ enum CeAvailability {
 }
 
 pub fn on_boot_completed() {
-    apply_after_ce_available("boot-completed");
-
-    if matches!(user_0_ce_availability(), CeAvailability::Locked) {
-        wait_for_user_0_ce_available();
+    match user_0_ce_availability() {
+        CeAvailability::Available => {
+            apply_after_ce_available("user-0-ce-available-at-boot-completed");
+        }
+        CeAvailability::Locked => {
+            wait_for_user_0_ce_available();
+        }
+        CeAvailability::Unknown => {
+            if should_wait_for_user_0_ce_available() {
+                wait_for_user_0_ce_available();
+            } else {
+                info!("{USER_0_CE_AVAILABLE_PROP} is unavailable on non-FBE device");
+                apply_after_ce_available("boot-completed-without-ce-property");
+            }
+        }
     }
 }
 
@@ -179,6 +194,12 @@ fn is_false_property_value(value: &str) -> bool {
     value == "0" || value.eq_ignore_ascii_case("false")
 }
 
+fn should_wait_for_user_0_ce_available() -> bool {
+    crate::android::utils::getprop("ro.crypto.type")
+        .as_deref()
+        .is_some_and(|value| value.eq_ignore_ascii_case("file"))
+}
+
 fn wait_for_user_0_ce_available() {
     match crate::android::utils::create_daemon(false) {
         Ok(true) => {}
@@ -209,29 +230,25 @@ fn wait_for_user_0_ce_available_inner() -> Result<bool> {
     sys_prop::init().context("Failed to initialize system property API")?;
     let rp = resetprop();
 
-    match user_0_ce_availability() {
-        CeAvailability::Available => return Ok(true),
-        CeAvailability::Unknown => return Ok(false),
-        CeAvailability::Locked => {}
-    }
-
     info!("waiting for {USER_0_CE_AVAILABLE_PROP}");
     loop {
         match user_0_ce_availability() {
             CeAvailability::Available => return Ok(true),
-            CeAvailability::Unknown => {
-                info!("{USER_0_CE_AVAILABLE_PROP} is unavailable, skip susfs CE watcher");
-                return Ok(false);
-            }
-            CeAvailability::Locked => {}
+            CeAvailability::Locked | CeAvailability::Unknown => {}
         }
 
-        let Some(current_value) = crate::android::utils::getprop(USER_0_CE_AVAILABLE_PROP) else {
-            info!("{USER_0_CE_AVAILABLE_PROP} disappeared, skip susfs CE watcher");
-            return Ok(false);
-        };
-        rp.wait(USER_0_CE_AVAILABLE_PROP, Some(current_value.as_str()), None)
+        let current_value = crate::android::utils::getprop(USER_0_CE_AVAILABLE_PROP);
+        let changed = rp
+            .wait(
+                USER_0_CE_AVAILABLE_PROP,
+                current_value.as_deref(),
+                Some(Duration::from_secs(CE_AVAILABLE_WAIT_TIMEOUT_SECS)),
+            )
             .context("wait for user 0 CE availability failed")?;
+        if !changed {
+            warn!("timed out waiting for {USER_0_CE_AVAILABLE_PROP}");
+            return Ok(false);
+        }
     }
 }
 
