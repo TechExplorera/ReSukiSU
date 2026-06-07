@@ -187,7 +187,7 @@ async def main():
     print("[+] Debug files uploaded,starting to upload release files")
     if len(upload_release_files) > 0:
         await send_media_group(bot=bot, chat_id=CHAT_ID, media=upload_release_files, message_thread_id=MESSAGE_THREAD_ID)
-    if BRANCH == "main" or GITHUB_REF_TYPE == "tag":
+    if TITLE.lower() == "manager" and (BRANCH == "main" or GITHUB_REF_TYPE == "tag"):
         print("[+] Sending main branch updated message")
         await bot.send_message(chat_id=CHAT_ID, text=MAIN_UPDATED_MSG, parse_mode=ParseMode.HTML, message_thread_id=DEVELOPING_THREAD_ID, disable_web_page_preview=True)
     print("[+] Done!")
