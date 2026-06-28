@@ -341,4 +341,49 @@ __weak long copy_from_kernel_nofault(void *dst, const void *src, size_t size)
     } while (0) /* fallthrough */
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0) || defined(KSU_COMPAT_HAVE_EXECMEM_API)
+
+#ifdef CONFIG_ARCH_HAS_EXECMEM_ROX
+#include <linux/set_memory.h>
+
+static int execmem_force_rw(void *ptr, size_t size)
+{
+    unsigned int nr = PAGE_ALIGN(size) >> PAGE_SHIFT;
+    unsigned long addr = (unsigned long)ptr;
+    int ret;
+
+    ret = set_memory_nx(addr, nr);
+    if (ret)
+        return ret;
+
+    return set_memory_rw(addr, nr);
+}
+#else
+/*
+ * when ROX cache is not used the permissions defined by architectures for
+ * execmem ranges that are updated before use (e.g. EXECMEM_MODULE_TEXT) must
+ * be writable anyway
+ */
+static inline int execmem_force_rw(void *ptr, size_t size)
+{
+    return 0;
+}
+#endif
+
+__weak void *execmem_alloc_rw(enum execmem_type type, size_t size)
+{
+    void *p __free(execmem) = execmem_alloc(type, size);
+    int err;
+
+    if (!p)
+        return NULL;
+
+    err = execmem_force_rw(p, size);
+    if (err)
+        return NULL;
+
+    return no_free_ptr(p);
+}
+#endif
+
 #endif
