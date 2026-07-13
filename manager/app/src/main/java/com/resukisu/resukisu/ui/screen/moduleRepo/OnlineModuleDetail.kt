@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -76,8 +77,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import com.resukisu.resukisu.R
 import com.resukisu.resukisu.ui.activity.PermissionRequestInterface
 import com.resukisu.resukisu.ui.component.ConfirmResult
@@ -220,14 +221,15 @@ fun OnlineModuleDetailScreen(module: ModuleRepoViewModel.RepoModule) {
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 when (page) {
-                    0 -> ReadmeTab(module, scrollBehavior.nestedScrollConnection, innerPadding.calculateTopPadding())
+                    0 -> ReadmeTab(module, scrollBehavior.nestedScrollConnection, innerPadding)
                     1 -> ReleasesTab(
                         module,
                         scrollBehavior.nestedScrollConnection,
                         coroutineScope,
-                        innerPadding.calculateTopPadding()
+                        innerPadding
                     )
-                    2 -> InfoTab(module, scrollBehavior.nestedScrollConnection, innerPadding.calculateTopPadding())
+
+                    2 -> InfoTab(module, scrollBehavior.nestedScrollConnection, innerPadding)
                 }
             }
         }
@@ -239,7 +241,7 @@ fun OnlineModuleDetailScreen(module: ModuleRepoViewModel.RepoModule) {
 fun InfoTab(
     module: ModuleRepoViewModel.RepoModule,
     nestedScrollConnection: NestedScrollConnection,
-    topPadding: Dp
+    innerPadding: PaddingValues
 ) {
     val uriHandler = LocalUriHandler.current
 
@@ -249,7 +251,7 @@ fun InfoTab(
         .nestedScroll(nestedScrollConnection)
     ) {
         item {
-            Spacer(Modifier.height(topPadding))
+            Spacer(Modifier.height(innerPadding.calculateTopPadding()))
         }
         item {
             SegmentedColumn(
@@ -287,10 +289,14 @@ fun InfoTab(
                             onClick = {
                                 uriHandler.openUri(module.sourceUrl)
                             }
-                        ) {}
+                        )
                     }
                 }
             }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(innerPadding.calculateBottomPadding()))
         }
     }
 }
@@ -300,7 +306,7 @@ fun ReleasesTab(
     module: ModuleRepoViewModel.RepoModule,
     nestedScrollConnection: NestedScrollConnection,
     coroutineScope: CoroutineScope,
-    topPadding: Dp
+    innerPadding: PaddingValues,
 ) {
     LazyColumn(
         modifier = Modifier
@@ -309,13 +315,16 @@ fun ReleasesTab(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Spacer(Modifier.height(topPadding))
+            Spacer(Modifier.height(innerPadding.calculateTopPadding()))
         }
         items(
             items = module.releases,
             key = { it.tagName }
         ) {
             ReleaseCard(module, it, coroutineScope)
+        }
+        item {
+            Spacer(Modifier.height(innerPadding.calculateBottomPadding()))
         }
     }
 }
@@ -325,7 +334,7 @@ fun ReleasesTab(
 fun ReadmeTab(
     module: ModuleRepoViewModel.RepoModule,
     nestedScrollConnection: NestedScrollConnection,
-    topPadding: Dp
+    innerPadding: PaddingValues
 ) {
     val loading = remember { mutableStateOf(true) }
 
@@ -337,7 +346,7 @@ fun ReadmeTab(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Spacer(Modifier.height(topPadding))
+                Spacer(Modifier.height(innerPadding.calculateTopPadding()))
             }
             item {
                 Surface(
@@ -376,6 +385,16 @@ fun ReadmeTab(
                         Spacer(modifier = Modifier.fillParentMaxSize())
                     }
                 }
+            }
+            item {
+                Spacer(
+                    modifier = Modifier.height(
+                        max(
+                            innerPadding.calculateBottomPadding() - 16.dp,
+                            0.dp
+                        )
+                    )
+                )
             }
         }
         if (loading.value) {

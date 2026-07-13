@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.twotone.Check
 import androidx.compose.material.icons.twotone.Close
 import androidx.compose.material.icons.twotone.Download
+import androidx.compose.material.icons.twotone.Extension
 import androidx.compose.material.icons.twotone.MoreVert
 import androidx.compose.material.icons.twotone.SignalWifiOff
 import androidx.compose.material.icons.twotone.Star
@@ -159,7 +160,7 @@ fun ModuleRepoScreen() {
         viewModel.setSortStargazerCountFirst(prefs.getBoolean("module_repo_sort_star_first", false))
     }
 
-    val isLoading = uiState.modules.isEmpty()
+    val isLoading = uiState.modules.isEmpty() && uiState.search.isEmpty()
 
     Scaffold(
         topBar = {
@@ -246,6 +247,31 @@ fun ModuleRepoScreen() {
                     viewModel.refresh(onFailure = {
                         offline = true
                     })
+                }
+            }
+        } else if (uiState.modules.isEmpty() && uiState.search.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.TwoTone.Extension,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(96.dp)
+                            .padding(bottom = 16.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.search_no_any_match),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
                 }
             }
         } else {

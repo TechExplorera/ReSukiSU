@@ -417,7 +417,11 @@ fun ModulePage(bottomPadding: Dp) {
                                 .padding(bottom = 16.dp)
                         )
                         Text(
-                            text = stringResource(R.string.module_empty),
+                            text =
+                                if (uiState.search.isNotEmpty())
+                                    stringResource(R.string.search_no_any_match)
+                                else
+                                    stringResource(R.string.module_empty),
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyLarge,
                         )
