@@ -240,53 +240,158 @@ jobs:
             echo "title=Manager" >> $GITHUB_OUTPUT
           fi
 
-      - name: Download artifact
-        uses: actions/download-artifact@v8
-        with:
-            name: ${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }}
-            path: artifacts/${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }}
-      
-      - name: Download arm64 ksud
-        uses: actions/download-artifact@v8
-        with:
-          name: ksud-aarch64-linux-android
-          path: artifacts/ksud-aarch64-linux-android
+      - name: Download gradle artifact (with retries)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: ${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }}
+          TARGET_DIR: artifacts/${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$TARGET_DIR"
+          sudo apt-get update -y
+          sudo apt-get install -y jq unzip curl
+          API="https://api.github.com/repos/${{ github.repository }}/actions/artifacts"
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt to find/download artifact $ARTIFACT_NAME"
+            ART_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API" | jq -r --arg NAME "$ARTIFACT_NAME" '.artifacts[] | select(.name == $NAME) | .id' || true)
+            if [ -n "$ART_ID" ] && [ "$ART_ID" != "null" ]; then
+              DOWNLOAD_URL="https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$ART_ID/zip"
+              echo "Found artifact id $ART_ID, downloading..."
+              curl -L -H "Authorization: token $GITHUB_TOKEN" --retry 3 --retry-delay 3 -o /tmp/artifact.zip "$DOWNLOAD_URL"
+              unzip -q /tmp/artifact.zip -d "$TARGET_DIR" && rm -f /tmp/artifact.zip
+              if [ "$(find "$TARGET_DIR" -type f | wc -l)" -gt 0 ]; then
+                echo "Artifact downloaded and extracted to $TARGET_DIR"
+                break
+              else
+                echo "Download succeeded but no files extracted, retrying..."
+              fi
+            else
+              echo "Artifact not found (attempt $attempt), retrying..."
+            fi
+            sleep 5
+            if [ $attempt -eq 3 ]; then
+              echo "ERROR: Failed to download artifact $ARTIFACT_NAME after 3 attempts"
+              exit 1
+            fi
+          done
 
-      - name: Download x86_64 ksud
-        uses: actions/download-artifact@v8
-        with:
-          name: ksud-x86_64-linux-android
-          path: artifacts/ksud-x86_64-linux-android
+      - name: Download arm64 ksud (with retries)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: ksud-aarch64-linux-android
+          TARGET_DIR: artifacts/ksud-aarch64-linux-android
+        run: |
+          set -euo pipefail
+          mkdir -p "$TARGET_DIR"
+          sudo apt-get update -y
+          sudo apt-get install -y jq unzip curl
+          API="https://api.github.com/repos/${{ github.repository }}/actions/artifacts"
+          for attempt in 1 2 3; do
+            ART_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API" | jq -r --arg NAME "$ARTIFACT_NAME" '.artifacts[] | select(.name == $NAME) | .id' || true)
+            if [ -n "$ART_ID" ] && [ "$ART_ID" != "null" ]; then
+              DOWNLOAD_URL="https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$ART_ID/zip"
+              curl -L -H "Authorization: token $GITHUB_TOKEN" --retry 3 --retry-delay 3 -o /tmp/artifact.zip "$DOWNLOAD_URL"
+              unzip -q /tmp/artifact.zip -d "$TARGET_DIR" && rm -f /tmp/artifact.zip
+              if [ "$(find "$TARGET_DIR" -type f | wc -l)" -gt 0 ]; then
+                echo "Artifact downloaded and extracted to $TARGET_DIR"
+                break
+              fi
+            fi
+            sleep 2
+            if [ $attempt -eq 3 ]; then
+              echo "ERROR: Failed to download artifact $ARTIFACT_NAME after 3 attempts"
+              exit 1
+            fi
+          done
 
-      - name: Download arm ksud
-        uses: actions/download-artifact@v8
-        with:
-          name: ksud-armv7-linux-androideabi
-          path: artifacts/ksud-armv7-linux-androideabi
+      - name: Download x86_64 ksud (with retries)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: ksud-x86_64-linux-android
+          TARGET_DIR: artifacts/ksud-x86_64-linux-android
+        run: |
+          set -euo pipefail
+          mkdir -p "$TARGET_DIR"
+          sudo apt-get update -y
+          sudo apt-get install -y jq unzip curl
+          API="https://api.github.com/repos/${{ github.repository }}/actions/artifacts"
+          for attempt in 1 2 3; do
+            ART_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API" | jq -r --arg NAME "$ARTIFACT_NAME" '.artifacts[] | select(.name == $NAME) | .id' || true)
+            if [ -n "$ART_ID" ] && [ "$ART_ID" != "null" ]; then
+              DOWNLOAD_URL="https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$ART_ID/zip"
+              curl -L -H "Authorization: token $GITHUB_TOKEN" --retry 3 --retry-delay 3 -o /tmp/artifact.zip "$DOWNLOAD_URL"
+              unzip -q /tmp/artifact.zip -d "$TARGET_DIR" && rm -f /tmp/artifact.zip
+              if [ "$(find "$TARGET_DIR" -type f | wc -l)" -gt 0 ]; then
+                echo "Artifact downloaded and extracted to $TARGET_DIR"
+                break
+              fi
+            fi
+            sleep 2
+            if [ $attempt -eq 3 ]; then
+              echo "ERROR: Failed to download artifact $ARTIFACT_NAME after 3 attempts"
+              exit 1
+            fi
+          done
+
+      - name: Download arm ksud (with retries)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: ksud-armv7-linux-androideabi
+          TARGET_DIR: artifacts/ksud-armv7-linux-androideabi
+        run: |
+          set -euo pipefail
+          mkdir -p "$TARGET_DIR"
+          sudo apt-get update -y
+          sudo apt-get install -y jq unzip curl
+          API="https://api.github.com/repos/${{ github.repository }}/actions/artifacts"
+          for attempt in 1 2 3; do
+            ART_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API" | jq -r --arg NAME "$ARTIFACT_NAME" '.artifacts[] | select(.name == $NAME) | .id' || true)
+            if [ -n "$ART_ID" ] && [ "$ART_ID" != "null" ]; then
+              DOWNLOAD_URL="https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$ART_ID/zip"
+              curl -L -H "Authorization: token $GITHUB_TOKEN" --retry 3 --retry-delay 3 -o /tmp/artifact.zip "$DOWNLOAD_URL"
+              unzip -q /tmp/artifact.zip -d "$TARGET_DIR" && rm -f /tmp/artifact.zip
+              if [ "$(find "$TARGET_DIR" -type f | wc -l)" -gt 0 ]; then
+                echo "Artifact downloaded and extracted to $TARGET_DIR"
+                break
+              fi
+            fi
+            sleep 2
+            if [ $attempt -eq 3 ]; then
+              echo "ERROR: Failed to download artifact $ARTIFACT_NAME after 3 attempts"
+              exit 1
+            fi
+          done
 
       - name: Place manager apk and ksud artifacts
         run: |
+          set -euo pipefail
           mkdir -p manager/app/build/outputs/apk/${{ matrix.build_type }}
-          APKS=$(find artifacts/${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }} -type f -name "*.apk")
+          APKS=$(find artifacts/${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }} -type f -name "*.apk" || true)
+          if [ -z "$APKS" ]; then
+            echo "ERROR: No APKs found in artifacts/${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }}. Previous artifact download likely failed."
+            ls -la artifacts || true
+            exit 1
+          fi
           APKS=$(echo "$APKS" | tr '\n' ' ')
-          test -n "$APKS"
           cp -f $APKS manager/app/build/outputs/apk/${{ matrix.build_type }}/
 
           mkdir -p target/aarch64-linux-android/release
           mkdir -p target/armv7-linux-androideabi/release
           mkdir -p target/x86_64-linux-android/release
-          ARM64_KSUD=$(find artifacts/ksud-aarch64-linux-android -type f -name ksud | head -n 1)
-          ARMV7_KSUD=$(find artifacts/ksud-armv7-linux-androideabi -type f -name ksud | head -n 1)
-          X86_64_KSUD=$(find artifacts/ksud-x86_64-linux-android -type f -name ksud | head -n 1)
-          test -n "$ARM64_KSUD"
-          test -n "$ARMV7_KSUD"
-          test -n "$X86_64_KSUD"
+          ARM64_KSUD=$(find artifacts/ksud-aarch64-linux-android -type f -name ksud | head -n 1 || true)
+          ARMV7_KSUD=$(find artifacts/ksud-armv7-linux-androideabi -type f -name ksud | head -n 1 || true)
+          X86_64_KSUD=$(find artifacts/ksud-x86_64-linux-android -type f -name ksud | head -n 1 || true)
+          if [ -z "$ARM64_KSUD" ] || [ -z "$ARMV7_KSUD" ] || [ -z "$X86_64_KSUD" ]; then
+            echo "ERROR: One or more ksud binaries were not found. Check earlier artifact downloads."
+            ls -la artifacts || true
+            exit 1
+          fi
           cp -f "$ARM64_KSUD" target/aarch64-linux-android/release/ksud
           cp -f "$ARMV7_KSUD" target/armv7-linux-androideabi/release/ksud
           cp -f "$X86_64_KSUD" target/x86_64-linux-android/release/ksud
 
       - name: Prepare signing inputs
-        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/sync-upstream')) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/sync-upstream')) }}
         env:
           PR_KEYSTORE: ${{ needs.generate-key.outputs.keystore }}
           PR_KEYSTORE_PASSWORD: ${{ needs.generate-key.outputs.keystore_password }}
@@ -296,6 +401,7 @@ jobs:
           PROD_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           PROD_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "$PR_KEYSTORE" | base64 -d > pr-key.jks
             echo "SIGN_KEYSTORE_FILE=pr-key.jks" >> $GITHUB_ENV
@@ -303,7 +409,11 @@ jobs:
             echo "SIGN_KEYSTORE_PASSWORD=$PR_KEYSTORE_PASSWORD" >> $GITHUB_ENV
             echo "SIGN_KEY_PASSWORD=$PR_KEY_PASSWORD" >> $GITHUB_ENV
           else
-            test -n "$PROD_KEYSTORE"
+            # Ensure production secrets exist and fail with helpful message if not
+            if [ -z "${PROD_KEYSTORE:-}" ] || [ -z "${PROD_KEY_ALIAS:-}" ] || [ -z "${PROD_KEYSTORE_PASSWORD:-}" ] || [ -z "${PROD_KEY_PASSWORD:-}" ]; then
+              echo "ERROR: Production signing secrets are missing. Please set repository secrets: KEYSTORE, KEY_ALIAS, KEYSTORE_PASSWORD, KEY_PASSWORD."
+              exit 1
+            fi
             echo "$PROD_KEYSTORE" | base64 -d > key.jks
             echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
             echo "SIGN_KEY_ALIAS=$PROD_KEY_ALIAS" >> $GITHUB_ENV
@@ -312,7 +422,7 @@ jobs:
           fi
 
       - name: Repack and resign
-        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/sync-upstream')) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/sync-upstream')) }}
         run: |
           python3 repack_apk_multi.py repack \
             -b ${{ matrix.build_type }} \
@@ -332,7 +442,7 @@ jobs:
           name: ${{ steps.determine.outputs.title }}-gradle-${{ matrix.build_type }}
         
       - name: Upload build artifact
-        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/sync-upstream')) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/sync-upstream')) }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.determine.outputs.title }}-${{ matrix.build_type }}
@@ -353,7 +463,7 @@ jobs:
       - name: Setup need_upload
         id: need_upload
         run: |
-          if [ ! -z "${{ secrets.BOT_TOKEN }}" ]; then
+          if [ ! -z "${{ secrets.BOT_TOKEN }} }" ]; then
             echo "UPLOAD=true" >> $GITHUB_OUTPUT
           else
             echo "UPLOAD=false" >> $GITHUB_OUTPUT
